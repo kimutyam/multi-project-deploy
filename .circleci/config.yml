@@ -1,0 +1,54 @@
+jobs:
+  build:
+    docker:
+      - image: circleci/openjdk:11-jdk-node
+
+    working_directory: ~/workspace
+
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-sbt-dependencies-{{ checksum "build.sbt" }}
+
+      - build-angel:
+          name: angel build
+          command: sbt "angel/assembly"
+
+      - build-devil:
+          name: devil build
+          command: sbt "devil/assembly"
+
+      - save_cache:
+          paths:
+            - ~/.cache/coursier
+          key: v1-sbt-dependencies-{{ checksum "build.sbt" }}
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  run-angel:
+    - run: java -jar angel/target/scala-2.13/multi-project-deploy-assembly-0.1.jar
+
+  run-devil:
+    - run: java -jar angel/target/scala-2.13/multi-project-deploy-assembly-0.1.jar
+
+workflows:
+  version: 2
+  build_run:
+    jobs:
+      - build
+      - run-approval-angel:
+          type: approval
+          requires:
+            - build
+      - run-approval-devil:
+          type: approval
+          requires:
+            - build
+      - run-angel:
+          requires:
+            - run-approval-angel
+      - run-approval-devil:
+          requires:
+            - deploy-approval
